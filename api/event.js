@@ -1,7 +1,4 @@
-// api/event.js — debug-friendly proxy to Supabase
-// - logs incoming payload
-// - forwards to SUPABASE_URL/rest/v1/events
-// - prints and returns Supabase response text so client sees the real error
+// api/event.js — parse JSON body manually, forward to Supabase
 const fetch = require('node-fetch');
 
 module.exports = async (req, res) => {
@@ -10,21 +7,30 @@ module.exports = async (req, res) => {
       return res.status(200).send('OK - POST JSON to insert event');
     }
 
-    // Basic payload sanity check
-    const payload = req.body;
+    // Parse raw body stream
+    let rawBody = '';
+    for await (const chunk of req) rawBody += chunk;
+    let payload;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch (e) {
+      console.error('Bad JSON:', rawBody);
+      return res.status(400).json({ error: 'invalid JSON', detail: e.message });
+    }
+
     if (!payload || !payload.device_id) {
       console.error('Bad payload received:', payload);
       return res.status(400).json({ error: 'bad payload - missing device_id' });
     }
 
-    // Optional: device key enforcement
+    // Optional: device key check
     const EXPECTED_KEY = process.env.DEVICE_KEY || null;
     if (EXPECTED_KEY && payload.device_key !== EXPECTED_KEY) {
       console.error('Invalid device_key:', payload.device_key, 'expected', EXPECTED_KEY);
       return res.status(403).json({ error: 'invalid device_key' });
     }
 
-    // Build Supabase REST request
+    // Supabase env vars
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_KEY = process.env.SUPABASE_KEY;
     if (!SUPABASE_URL || !SUPABASE_KEY) {
@@ -51,7 +57,6 @@ module.exports = async (req, res) => {
     console.log('Supabase status:', supRes.status);
     console.log('Supabase body:', text);
 
-    // Mirror Supabase status & body to client for full transparency
     res.status(supRes.status).type('application/json').send(text);
   } catch (err) {
     console.error('Proxy error:', err);
