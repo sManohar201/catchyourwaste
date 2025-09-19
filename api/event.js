@@ -57,7 +57,11 @@ module.exports = async (req, res) => {
     console.log('Supabase status:', supRes.status);
     console.log('Supabase body:', text);
 
-    res.status(supRes.status).type('application/json').send(text);
+    // Send Supabase response back to client
+    res.status(supRes.status);
+    res.setHeader('Content-Type', 'application/json');
+    res.end(text);
+
   } catch (err) {
     console.error('Proxy error:', err);
     res.status(500).json({ error: 'proxy exception', detail: String(err) });
