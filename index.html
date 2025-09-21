@@ -1,27 +1,137 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>CatchYourWaste – Events Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    /* Theme tweaks */
+    :root{
+      --accent-start: #0ea5a4; /* teal-ish */
+      --accent-end:  #16a34a; /* green */
+      --glass: rgba(255,255,255,0.06);
+    }
+
+    /* small weight-change pulse (scale + glow) */
+    @keyframes binPulse {
+      0%   { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); }
+      20%  { transform: scale(1.06); box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+      100% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); }
+    }
+    .pulse-weight {
+      animation: binPulse 650ms cubic-bezier(.2,.9,.2,1);
+    }
+
+    /* event card entrance */
+    @keyframes slideUpFade {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .enter {
+      animation: slideUpFade 350ms ease-out;
+    }
+
+    /* subtle glass header */
+    .header-gradient {
+      background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
+      color: white;
+    }
+  </style>
 </head>
-<body class="bg-gray-100 text-gray-800 font-sans">
-  <div class="max-w-3xl mx-auto p-4">
-    <h1 class="text-2xl font-bold text-center mb-4">CatchYourWaste – Events</h1>
-    <div id="status" class="text-center text-sm text-gray-600 mb-2">Loading...</div>
-    <div id="events" class="space-y-3"></div>
+<body class="bg-gray-50 text-gray-800 antialiased">
+  <div class="max-w-5xl mx-auto p-4">
+    <!-- Header -->
+    <header class="header-gradient rounded-lg p-4 mb-6 shadow-md">
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <h1 class="text-2xl font-extrabold tracking-tight">CatchYourWaste</h1>
+          <p class="text-sm/6 opacity-90">Events & remote bin telemetry — environment safe · new technology</p>
+        </div>
+        <div class="text-right">
+          <div id="status" class="text-sm opacity-95">Loading…</div>
+          <div id="lastUpdated" class="text-xs opacity-80 mt-1"></div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Top: bin cards + total -->
+    <section class="mb-6">
+      <div class="grid grid-cols-1 sm:grid-cols-5 gap-4 items-stretch">
+        <!-- Bin 1 -->
+        <div id="bin1" class="sm:col-span-1 bg-white rounded-lg shadow p-4 flex flex-col items-center justify-center gap-2">
+          <div class="text-xs font-medium text-gray-500 uppercase">Green Can</div>
+          <div class="w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-semibold"
+               style="background: linear-gradient(180deg,#10B981,#059669)">
+            ♻️
+          </div>
+          <div class="text-sm text-gray-600">Weight</div>
+          <div id="w1" class="text-2xl font-bold text-gray-800">— g</div>
+        </div>
+
+        <!-- Bin 2 -->
+        <div id="bin2" class="sm:col-span-1 bg-white rounded-lg shadow p-4 flex flex-col items-center justify-center gap-2">
+          <div class="text-xs font-medium text-gray-500 uppercase">Red Can</div>
+          <div class="w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-semibold"
+               style="background: linear-gradient(180deg,#ef4444,#dc2626)">
+            🗑️
+          </div>
+          <div class="text-sm text-gray-600">Weight</div>
+          <div id="w2" class="text-2xl font-bold text-gray-800">— g</div>
+        </div>
+
+        <!-- Center total card spans two columns on small screens -->
+        <div class="sm:col-span-2 bg-white rounded-lg shadow p-4 flex flex-col justify-center">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="text-xs font-medium text-gray-500 uppercase">Vehicle total</div>
+              <div id="total" class="text-3xl font-extrabold mt-1">— g</div>
+            </div>
+            <div class="text-sm text-gray-500">Last event</div>
+          </div>
+          <div class="mt-3 text-sm text-gray-600" id="totalBreakdown">—</div>
+        </div>
+
+        <!-- Bin 3 -->
+        <div id="bin3" class="sm:col-span-1 bg-white rounded-lg shadow p-4 flex flex-col items-center justify-center gap-2">
+          <div class="text-xs font-medium text-gray-500 uppercase">Blue Can</div>
+          <div class="w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-semibold"
+               style="background: linear-gradient(180deg,#3b82f6,#2563eb)">
+            🧺
+          </div>
+          <div class="text-sm text-gray-600">Weight</div>
+          <div id="w3" class="text-2xl font-bold text-gray-800">— g</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Events list (deltas shown prominently) -->
+    <section>
+      <h2 class="text-lg font-semibold mb-3">Recent Events (deltas)</h2>
+      <div id="events" class="space-y-3"></div>
+    </section>
   </div>
 
   <script>
-    // TODO: replace with your Supabase project URL + anon key
+    // --- CONFIG: Replace with your Supabase project URL + anon key if needed ---
     const SUPABASE_URL = "https://gsmteapwcgdphodehzwt.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdzbXRlYXB3Y2dkcGhvZGVoend0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgyNTUxMDYsImV4cCI6MjA3MzgzMTEwNn0.az8Vh3B98P2_KdgZ96QUASW6ICoqi_y9j-AnU8Q88qg";
+
+    // internal state for previous totals to detect changes
+    let prevTotals = [null, null, null];
+
+    // friendly formatting
+    function fmt(v){ return (v === null || v === undefined) ? "— g" : (Math.round(v) + " g"); }
+    function fmtFloat(v){ return (v === null || v === undefined) ? "—" : (Math.round(v * 10)/10).toFixed(1); }
 
     async function fetchEvents() {
       const statusEl = document.getElementById("status");
       const eventsEl = document.getElementById("events");
+      const lastUpdatedEl = document.getElementById("lastUpdated");
+
       try {
+        statusEl.textContent = "Fetching latest events…";
         const res = await fetch(`${SUPABASE_URL}/rest/v1/events?select=*&order=created_at.desc&limit=10`, {
           headers: {
             apikey: SUPABASE_ANON_KEY,
@@ -31,31 +141,102 @@
         if (!res.ok) throw new Error("Supabase error " + res.status);
         const data = await res.json();
 
-        statusEl.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+        // update status
+        const now = new Date();
+        statusEl.textContent = `Showing ${data.length} latest events`;
+        lastUpdatedEl.textContent = `Updated: ${now.toLocaleString()}`;
+
+        // Update bin cards based on the most recent event
+        if (data.length > 0) {
+          const latest = data[0]; // newest event
+          // Expecting latest.tot to be an array [w1,w2,w3]
+          const tot = Array.isArray(latest.tot) ? latest.tot : [0,0,0];
+          // Clamp to 3 items
+          const t = [ tot[0] ?? 0, tot[1] ?? 0, tot[2] ?? 0 ];
+
+          // update DOM with animations when values change
+          updateBinDisplay(1, t[0]);
+          updateBinDisplay(2, t[1]);
+          updateBinDisplay(3, t[2]);
+
+          // update total
+          const total = (t[0] + t[1] + t[2]);
+          document.getElementById("total").textContent = Math.round(total) + " g";
+          document.getElementById("totalBreakdown").textContent = 
+            `Green: ${Math.round(t[0])} g · Red: ${Math.round(t[1])} g · Blue: ${Math.round(t[2])} g`;
+        }
+
+        // Render event cards (show deltas 'd' prominently)
         eventsEl.innerHTML = "";
         data.forEach(ev => {
+          const d = Array.isArray(ev.d) ? ev.d : [0,0,0];
           const card = document.createElement("div");
-          card.className = "bg-white shadow rounded p-4";
+          card.className = "bg-white rounded-lg shadow p-3 enter";
+
+          // build delta badges with color coding and sign
+          const badges = [
+            `<span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium" style="background: rgba(16,185,129,0.12); color:#059669;">${d[0] >= 0 ? "▲" : "▼"} ${Math.abs(Math.round(d[0]))} g</span>`,
+            `<span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium" style="background: rgba(239,68,68,0.10); color:#b91c1c;">${d[1] >= 0 ? "▲" : "▼"} ${Math.abs(Math.round(d[1]))} g</span>`,
+            `<span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium" style="background: rgba(59,130,246,0.10); color:#1d4ed8;">${d[2] >= 0 ? "▲" : "▼"} ${Math.abs(Math.round(d[2]))} g</span>`
+          ];
+
           card.innerHTML = `
-            <div class="flex justify-between items-center">
-              <span class="font-semibold">${ev.device_id}</span>
-              <span class="text-xs text-gray-500">${new Date(ev.created_at).toLocaleString()}</span>
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="text-sm font-semibold">${ev.device_id}</div>
+                <div class="text-xs text-gray-500 mt-0.5">${new Date(ev.created_at).toLocaleString()}</div>
+              </div>
+              <div class="flex flex-col items-end gap-2">
+                <div class="text-xs text-gray-500">dur: ${ev.dur} ms</div>
+                <div class="text-sm">${badges.join(' ')}</div>
+              </div>
             </div>
-            <div class="mt-2 text-sm">
-              <p><b>ts:</b> ${ev.ts}</p>
-              <p><b>tot:</b> ${JSON.stringify(ev.tot)}</p>
-              <p><b>d:</b> ${JSON.stringify(ev.d)}</p>
-              <p><b>dur:</b> ${ev.dur}</p>
+            <div class="mt-2 text-sm text-gray-600">
+              <div><strong>tot:</strong> [${(Array.isArray(ev.tot)? ev.tot.map(v=>Math.round(v)).join(", "): "—")}]</div>
+              <div class="mt-1 text-xs text-gray-500">ts: ${ev.ts}</div>
             </div>
           `;
           eventsEl.appendChild(card);
         });
+
       } catch (err) {
         statusEl.textContent = "Error: " + err.message;
       }
     }
 
-    // initial + refresh every 5s
+    // Updates a single bin display with animation if changed.
+    // binIndex: 1..3
+    function updateBinDisplay(binIndex, newVal) {
+      const el = document.getElementById('w' + binIndex);
+      const card = document.getElementById('bin' + binIndex);
+      const prev = prevTotals[binIndex - 1];
+
+      // format
+      el.textContent = Math.round(newVal) + ' g';
+
+      // if prev is null -> initial render, just set prev without animating
+      if (prev === null) {
+        prevTotals[binIndex -1] = newVal;
+        return;
+      }
+
+      // if changed more than a small epsilon -> animate
+      const eps = 0.5; // grams tolerance
+      if (Math.abs(newVal - prev) > eps) {
+        // add pulse class
+        card.classList.remove('pulse-weight');         // restart animation if already present
+        void card.offsetWidth;                         // force reflow
+        card.classList.add('pulse-weight');
+
+        // remove after animation finishes (safety)
+        setTimeout(() => {
+          card.classList.remove('pulse-weight');
+        }, 800);
+      }
+      prevTotals[binIndex -1] = newVal;
+    }
+
+    // initial fetch + periodic refresh
     fetchEvents();
     setInterval(fetchEvents, 5000);
   </script>
